@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCFHS Patient Safety & Safety Override Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-2xl w-full bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 fade-in">
+        <!-- Header / Stats -->
+        <div class="flex justify-between items-center border-b border-slate-700 pb-4 mb-6">
+            <div>
+                <span class="text-xs uppercase tracking-widest text-emerald-400 font-bold">SCFHS Clinical Safety</span>
+                <h1 class="text-xl font-bold text-white">Safety Override Simulator</h1>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-slate-400 block">Skor Saat Ini</span>
+                <span id="score-display" class="text-lg font-mono font-bold text-amber-400">0 / 0</span>
+            </div>
+        </div>
+
+        <!-- Meta Info Soal -->
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+            <span id="case-category" class="bg-slate-700 px-2.5 py-1 rounded text-slate-300 font-semibold">Sektor: -</span>
+            <span id="case-id" class="font-mono">Case -- / --</span>
+        </div>
+
+        <!-- Vignette Card -->
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-5 mb-6 space-y-3">
+            <div>
+                <span class="text-xs font-bold text-rose-400 tracking-wider uppercase">High-Risk Clinical Vignette</span>
+                <h2 id="case-diagnosis" class="text-lg font-bold text-slate-100">Diagnosis: -</h2>
+            </div>
+            
+            <div>
+                <span class="text-xs font-semibold text-slate-400">Key Symptoms & Vitals:</span>
+                <p id="case-symptoms" class="text-sm text-slate-300 leading-relaxed font-mono mt-0.5">-</p>
+            </div>
+
+            <div class="border-t border-slate-800 pt-3">
+                <span class="text-xs font-semibold text-slate-400">Standard Baseline Action:</span>
+                <p id="case-baseline" class="text-sm text-slate-300 mt-0.5">-</p>
+            </div>
+
+            <div class="bg-slate-900 border border-amber-500/30 p-3 rounded-md mt-2">
+                <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block">Proposed Intervention / Order:</span>
+                <p id="case-proposed" class="text-base font-bold text-amber-200 mt-1">-</p>
+            </div>
+        </div>
+
+        <!-- Interaction Buttons -->
+        <div id="action-buttons" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <!-- Disuntikkan secara acak lewat JS -->
+        </div>
+
+        <!-- Rationale Feedback Modal / Box -->
+        <div id="feedback-box" class="hidden p-4 rounded-lg border mb-6 fade-in">
+            <h3 id="feedback-title" class="font-bold text-lg mb-1"></h3>
+            <p id="feedback-rationale" class="text-sm leading-relaxed"></p>
+            <button onclick="loadNextCase()" class="mt-4 w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-all">
+                Lanjut ke Kasus Berikutnya &rarr;
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DATASET MULTI-SEKTOR (SAFE & CONTRAINDICATED VARIATIONS)
+        const clinicalCases = [
+            // ENDOKRIN
+            {
+                sector: "Endocrinology",
+                diagnosis: "Addisonian Crisis",
+                symptoms: "Profound hypotension BP 70/40, hyponatremia, hyperkalemia, severe abdominal pain, collapse",
+                baseline: "Recumbent position, continuous vitals monitoring, IV access",
+                proposed: "Abrupt Steroid Discontinuation",
+                isSafe: false,
+                rationale: "KONTRAINDIKASI MUTLAK: Menghentikan steroid secara mendadak saat krisis adrenal dapat memicu kolaps kardiovaskular fatal."
+            },
+            {
+                sector: "Endocrinology",
+                diagnosis: "Addisonian Crisis",
+                symptoms: "Profound hypotension BP 70/40, hyponatremia, hyperkalemia, severe abdominal pain",
+                baseline: "Recumbent position, continuous vitals monitoring, IV hydration access",
+                proposed: "Immediate IV Hydrocortisone 100mg Bolus & Rapid Normal Saline Infusion",
+                isSafe: true,
+                rationale: "AMAN & DIREKOMENDASIKAN: Pemberian glukokortikoid dosis tinggi IV dan penggantian volume cairan adalah penanganan lini pertama krisis adrenal."
+            },
+            // RESPIRASI
+            {
+                sector: "Pulmonology",
+                diagnosis: "Severe Acute Asthma Exacerbation",
+                symptoms: "Wheezing, tachypnea RR 32/min, SpO2 88% on room air, accessory muscle use",
+                baseline: "High-flow oxygen therapy, continuous pulse oximetry",
+                proposed: "Administer Oral Propranolol 40mg for Tachycardia",
+                isSafe: false,
+                rationale: "KONTRAINDIKASI MUTLAK: Non-selective beta-blockers seperti Propranolol dapat memicu bronkospasme berat pada pasien asma."
+            },
+            {
+                sector: "Pulmonology",
+                diagnosis: "Severe Acute Asthma Exacerbation",
+                symptoms: "Wheezing, tachypnea RR 32/min, SpO2 88% on room air, accessory muscle use",
+                baseline: "High-flow oxygen therapy, continuous pulse oximetry",
+                proposed: "Nebulized Albuterol + Ipratropium Bromide Combination",
+                isSafe: true,
+                rationale: "AMAN & DIREKOMENDASIKAN: Bronkodilator inhalasi kombinasi SABA dan SAMA adalah terapi standar emas eksaserbasi asma berat."
+            },
+            // KARDIOLOGI
+            {
+                sector: "Cardiology",
+                diagnosis: "Acute Decompensated Heart Failure with Pulmonary Edema",
+                symptoms: "Severe dyspnea, pink frothy sputum, BP 170/100, bilateral crackles",
+                baseline: "Upright position, High-flow O2, Continuous ECG monitoring",
+                proposed: "Rapid IV Fluid Bolus 1000ml Normal Saline",
+                isSafe: false,
+                rationale: "KONTRAINDIKASI MUTLAK: Giving IV fluid bolus akan memperparah kelebihan beban volume (fluid overload) dan edema paru."
+            },
+            {
+                sector: "Cardiology",
+                diagnosis: "Acute Decompensated Heart Failure with Pulmonary Edema",
+                symptoms: "Severe dyspnea, pink frothy sputum, BP 170/100, bilateral crackles",
+                baseline: "Upright position, High-flow O2, Continuous ECG monitoring",
+                proposed: "IV Furosemide 40mg & Sublingual Nitroglycerin",
+                isSafe: true,
+                rationale: "AMAN & DIREKOMENDASIKAN: Diuretik membuang kelebihan cairan dan nitrat mengurangi preload/afterload jantung."
+            },
+            // NEUROLOGI
+            {
+                sector: "Neurology",
+                diagnosis: "Acute Ischemic Stroke (within 3 hours of onset)",
+                symptoms: "Right-sided hemiplegia, facial droop, motor aphasia, CT scan rules out hemorrhage",
+                baseline: "NPO, elevation of head 30 degrees, neuro checks q15m",
+                proposed: "Immediate IV Thrombolytic (rtPA / Alteplase) Administration",
+                isSafe: true,
+                rationale: "AMAN & DIREKOMENDASIKAN: IV rtPA adalah terapi reperfusi standar jika tidak ada kontraindikasi perdarahan."
+            },
+            {
+                sector: "Neurology",
+                diagnosis: "Acute Hemorrhagic Stroke",
+                symptoms: "Sudden severe headache, vomiting, BP 210/110, CT shows intracerebral hemorrhage",
+                baseline: "Strict bed rest, neuro checks, blood pressure control protocol",
+                proposed: "Administer IV Heparin Infusion Bolus",
+                isSafe: false,
+                rationale: "KONTRAINDIKASI MUTLAK: Antikoagulan seperti Heparin akan memperluas perdarahan di otak dan berakibat fatal."
+            },
+            // NEFROLOGI / ELEKTROLIT
+            {
+                sector: "Nephrology",
+                diagnosis: "Severe Hyperkalemia (Serum Potassium 7.2 mEq/L)",
+                symptoms: "Peaked T waves on ECG, muscle weakness, bradycardia",
+                baseline: "Continuous cardiac monitoring, re-check lab specimen",
+                proposed: "Direct IV Push Potassium Chloride (KCl) 20 mEq",
+                isSafe: false,
+                rationale: "KONTRAINDIKASI MUTLAK: Menginjeksikan KCl secara IV Push dapat menyebabkan henti jantung (cardiac arrest) mendadak!"
+            }
+        ];
+
+        let shuffledCases = [];
+        let currentIndex = 0;
+        let score = 0;
+        let totalAnswered = 0;
+
+        // Shuffle Array Helper
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function initApp() {
+            shuffledCases = shuffle([...clinicalCases]);
+            currentIndex = 0;
+            score = 0;
+            totalAnswered = 0;
+            updateScoreDisplay();
+            renderCase();
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('score-display').innerText = `${score} /${totalAnswered}`;
+        }
+
+        function renderCase() {
+            document.getElementById('feedback-box').classList.add('hidden');
+            
+            if (currentIndex >= shuffledCases.length) {
+                // Reshuffle jika kasus habis
+                shuffledCases = shuffle([...clinicalCases]);
+                currentIndex = 0;
+            }
+
+            const current = shuffledCases[currentIndex];
+
+            document.getElementById('case-category').innerText = `Sektor: ${current.sector}`;
+            document.getElementById('case-id').innerText = `Case ${currentIndex + 1} /${shuffledCases.length}`;
+            document.getElementById('case-diagnosis').innerText = `Diagnosis: ${current.diagnosis}`;
+            document.getElementById('case-symptoms').innerText = current.symptoms;
+            document.getElementById('case-baseline').innerText = current.baseline;
+            document.getElementById('case-proposed').innerText = current.proposed;
+
+            // ACAK POSISI TOMBOL PILIHAN
+            const buttonsContainer = document.getElementById('action-buttons');
+            buttonsContainer.innerHTML = '';
+
+            const safeBtnHtml = `
+                <button onclick="handleAnswer(true)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg flex items-center justify-center gap-2">
+                    <span>✅</span> Safe to Execute Order
+                </button>
+            `;
+
+            const stopBtnHtml = `
+                <button onclick="handleAnswer(false)" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg flex items-center justify-center gap-2">
+                    <span>🛑</span> CONTRAINDICATED (Stop & Report)
+                </button>
+            `;
+
+            const buttonOptions = [safeBtnHtml, stopBtnHtml];
+            shuffle(buttonOptions);
+
+            buttonsContainer.innerHTML = buttonOptions.join('');
+            buttonsContainer.classList.remove('hidden');
+        }
+
+        function handleAnswer(userSelectedSafe) {
+            const current = shuffledCases[currentIndex];
+            const isCorrect = userSelectedSafe === current.isSafe;
+
+            totalAnswered++;
+            if (isCorrect) score++;
+
+            updateScoreDisplay();
+
+            // Sembunyikan tombol saat feedback tampil
+            document.getElementById('action-buttons').classList.add('hidden');
+
+            const feedbackBox = document.getElementById('feedback-box');
+            const feedbackTitle = document.getElementById('feedback-title');
+            const feedbackRationale = document.getElementById('feedback-rationale');
+
+            feedbackBox.classList.remove('hidden', 'bg-emerald-950', 'border-emerald-500', 'bg-rose-950', 'border-rose-500', 'text-emerald-200', 'text-rose-200');
+
+            if (isCorrect) {
+                feedbackBox.classList.add('bg-emerald-950', 'border-emerald-500', 'text-emerald-200');
+                feedbackTitle.innerText = "🎯 Tepat Sekali!";
+            } else {
+                feedbackBox.classList.add('bg-rose-950', 'border-rose-500', 'text-rose-200');
+                feedbackTitle.innerText = "❌ Keputusan Berbahaya!";
+            }
+
+            feedbackRationale.innerText = current.rationale;
+        }
+
+        function loadNextCase() {
+            currentIndex++;
+            renderCase();
+        }
+
+        // Jalankan aplikasi saat dimuat
+        window.onload = initApp;
+    </script>
+</body>
+</html>
